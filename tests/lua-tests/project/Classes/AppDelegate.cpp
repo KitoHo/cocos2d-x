@@ -1,8 +1,10 @@
 #include "cocos2d.h"
 #include "AppDelegate.h"
-#include "CCLuaEngine.h"
+#include "scripting/lua-bindings/manual/CCLuaEngine.h"
 #include "audio/include/SimpleAudioEngine.h"
 #include "lua_assetsmanager_test_sample.h"
+#include "scripting/lua-bindings/manual/lua_module_register.h"
+#include "lua_test_bindings.h"
 
 using namespace CocosDenshion;
 
@@ -17,98 +19,44 @@ AppDelegate::~AppDelegate()
     SimpleAudioEngine::end();
 }
 
+void AppDelegate::initGLContextAttrs()
+{
+    GLContextAttrs glContextAttrs = {8, 8, 8, 8, 24, 8};
+    
+    GLView::setGLContextAttrs(glContextAttrs);
+}
+
 bool AppDelegate::applicationDidFinishLaunching()
 {
-    auto director = Director::getInstance();
-    auto glview = director->getOpenGLView();
-    if(!glview) {
-        glview = GLView::createWithRect("Lua Tests", Rect(0,0,900,640));
-        director->setOpenGLView(glview);
-    }
-
-    // turn on display FPS
-    director->setDisplayStats(true);
-
-    // set FPS. the default value is 1.0/60 if you don't call this
-    director->setAnimationInterval(1.0 / 60);
-
-    auto screenSize = glview->getFrameSize();
-
-    auto designSize = Size(480, 320);
-
-    auto pFileUtils = FileUtils::getInstance();
-
-    if (screenSize.height > 320)
-    {
-        auto resourceSize = Size(960, 640);
-        std::vector<std::string> searchPaths;
-        searchPaths.push_back("hd");
-        pFileUtils->setSearchPaths(searchPaths);
-        director->setContentScaleFactor(resourceSize.height/designSize.height);
-    }
-
-    glview->setDesignResolutionSize(designSize.width, designSize.height, ResolutionPolicy::FIXED_HEIGHT);
-
     // register lua engine
     LuaEngine* pEngine = LuaEngine::getInstance();
     ScriptEngineManager::getInstance()->setScriptEngine(pEngine);
 
-#if (CC_TARGET_PLATFORM == CC_PLATFORM_WIN32 || CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID ||CC_TARGET_PLATFORM == CC_PLATFORM_IOS || CC_TARGET_PLATFORM == CC_PLATFORM_MAC)
+    
     LuaStack* stack = pEngine->getLuaStack();
-    register_assetsmanager_test_sample(stack->getLuaState());
-#endif
+    stack->setXXTEAKeyAndSign("2dxLua", strlen("2dxLua"), "XXTEA", strlen("XXTEA"));
+    
+    lua_State* L = stack->getLuaState();
+    
+    lua_module_register(L);
 
-#if (CC_TARGET_PLATFORM == CC_PLATFORM_IOS || CC_TARGET_PLATFORM == CC_PLATFORM_MAC)
-    std::string resPrefix("");
-#else
-    std::string resPrefix("res/");
-#endif
-
-    std::vector<std::string> searchPaths = pFileUtils->getSearchPaths();
-    searchPaths.insert(searchPaths.begin(), resPrefix);
-
-    searchPaths.insert(searchPaths.begin(), resPrefix + "cocosbuilderRes");
-    if (screenSize.height > 320)
+    lua_getglobal(L, "_G");
+    if (lua_istable(L,-1))//stack:...,_G,
     {
-        searchPaths.insert(searchPaths.begin(), resPrefix + "hd");
-        searchPaths.insert(searchPaths.begin(), resPrefix + "ccs-res");
-        searchPaths.insert(searchPaths.begin(), resPrefix + "ccs-res/hd");
-        searchPaths.insert(searchPaths.begin(), resPrefix + "ccs-res/hd/Images");
-        searchPaths.insert(searchPaths.begin(), resPrefix + "ccs-res/hd/scenetest/ArmatureComponentTest");
-        searchPaths.insert(searchPaths.begin(), resPrefix + "ccs-res/hd/scenetest/AttributeComponentTest");
-        searchPaths.insert(searchPaths.begin(), resPrefix + "ccs-res/hd/scenetest/BackgroundComponentTest");
-        searchPaths.insert(searchPaths.begin(), resPrefix + "ccs-res/hd/scenetest/EffectComponentTest");
-        searchPaths.insert(searchPaths.begin(), resPrefix + "ccs-res/hd/scenetest/LoadSceneEdtiorFileTest");
-        searchPaths.insert(searchPaths.begin(), resPrefix + "ccs-res/hd/scenetest/ParticleComponentTest");
-        searchPaths.insert(searchPaths.begin(), resPrefix + "ccs-res/hd/scenetest/SpriteComponentTest");
-        searchPaths.insert(searchPaths.begin(), resPrefix + "ccs-res/hd/scenetest/TmxMapComponentTest");
-        searchPaths.insert(searchPaths.begin(), resPrefix + "ccs-res/hd/scenetest/UIComponentTest");
-        searchPaths.insert(searchPaths.begin(), resPrefix + "ccs-res/hd/scenetest/TriggerTest");
+#if (CC_TARGET_PLATFORM == CC_PLATFORM_WIN32 || CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID ||CC_TARGET_PLATFORM == CC_PLATFORM_IOS || CC_TARGET_PLATFORM == CC_PLATFORM_MAC)
+        register_assetsmanager_test_sample(L);
+#endif
+        register_test_binding(L);
     }
-    else
-    {
-        searchPaths.insert(searchPaths.begin(), resPrefix + "ccs-res/Images");
-        searchPaths.insert(searchPaths.begin(), resPrefix + "ccs-res/scenetest/ArmatureComponentTest");
-        searchPaths.insert(searchPaths.begin(), resPrefix + "ccs-res/scenetest/AttributeComponentTest");
-        searchPaths.insert(searchPaths.begin(), resPrefix + "ccs-res/scenetest/BackgroundComponentTest");
-        searchPaths.insert(searchPaths.begin(), resPrefix + "ccs-res/scenetest/EffectComponentTest");
-        searchPaths.insert(searchPaths.begin(), resPrefix + "ccs-res/scenetest/LoadSceneEdtiorFileTest");
-        searchPaths.insert(searchPaths.begin(), resPrefix + "ccs-res/scenetest/ParticleComponentTest");
-        searchPaths.insert(searchPaths.begin(), resPrefix + "ccs-res/scenetest/SpriteComponentTest");
-        searchPaths.insert(searchPaths.begin(), resPrefix + "ccs-res/scenetest/TmxMapComponentTest");
-        searchPaths.insert(searchPaths.begin(), resPrefix + "ccs-res/scenetest/UIComponentTest");
-        searchPaths.insert(searchPaths.begin(), resPrefix + "ccs-res/scenetest/TriggerTest");
-    }
+    lua_pop(L, 1);
 
-
-    FileUtils::getInstance()->setSearchPaths(searchPaths);
 
     pEngine->executeScriptFile("src/controller.lua");
 
     return true;
 }
 
-// This function will be called when the app is inactive. When comes a phone call,it's be invoked too
+// This function will be called when the app is inactive. Note, when receiving a phone call it is invoked.
 void AppDelegate::applicationDidEnterBackground()
 {
     Director::getInstance()->stopAnimation();

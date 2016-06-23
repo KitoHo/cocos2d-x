@@ -25,16 +25,18 @@ THE SOFTWARE.
 ****************************************************************************/
 
 #include "base/CCConfiguration.h"
-#include <string.h>
-#include "base/ccMacros.h"
-#include "base/ccConfig.h"
-#include "2d/platform/CCFileUtils.h"
+#include "platform/CCFileUtils.h"
+#include "base/CCEventCustom.h"
+#include "base/CCDirector.h"
+#include "base/CCEventDispatcher.h"
 
 NS_CC_BEGIN
 
 extern const char* cocos2dVersion();
 
 Configuration* Configuration::s_sharedConfiguration = nullptr;
+
+const char* Configuration::CONFIG_FILE_LOADED = "config_file_loaded";
 
 Configuration::Configuration()
 : _maxTextureSize(0) 
@@ -47,10 +49,17 @@ Configuration::Configuration()
 , _supportsBGRA8888(false)
 , _supportsDiscardFramebuffer(false)
 , _supportsShareableVAO(false)
+, _supportsOESDepth24(false)
+, _supportsOESPackedDepthStencil(false)
 , _maxSamplesAllowed(0)
 , _maxTextureUnits(0)
 , _glExtensions(nullptr)
+, _maxDirLightInShader(1)
+, _maxPointLightInShader(1)
+, _maxSpotLightInShader(1)
+, _animate3DQuality(Animate3DQuality::QUALITY_LOW)
 {
+    _loadedEvent = new (std::nothrow) EventCustom(CONFIG_FILE_LOADED);
 }
 
 bool Configuration::init()
@@ -81,6 +90,7 @@ bool Configuration::init()
 
 Configuration::~Configuration()
 {
+    CC_SAFE_DELETE(_loadedEvent);
 }
 
 std::string Configuration::getInfo() const
@@ -141,6 +151,14 @@ void Configuration::gatherGPUInfo()
 
     _supportsShareableVAO = checkForGLExtension("vertex_array_object");
 	_valueDict["gl.supports_vertex_array_object"] = Value(_supportsShareableVAO);
+    
+    _supportsOESDepth24 = checkForGLExtension("GL_OES_depth24");
+    _valueDict["gl.supports_OES_depth24"] = Value(_supportsOESDepth24);
+
+    
+    _supportsOESPackedDepthStencil = checkForGLExtension("GL_OES_packed_depth_stencil");
+    _valueDict["gl.supports_OES_packed_depth_stencil"] = Value(_supportsOESPackedDepthStencil);
+
 
     CHECK_GL_ERROR_DEBUG();
 }
@@ -149,7 +167,7 @@ Configuration* Configuration::getInstance()
 {
     if (! s_sharedConfiguration)
     {
-        s_sharedConfiguration = new Configuration();
+        s_sharedConfiguration = new (std::nothrow) Configuration();
         s_sharedConfiguration->init();
     }
     
@@ -161,13 +179,13 @@ void Configuration::destroyInstance()
     CC_SAFE_RELEASE_NULL(s_sharedConfiguration);
 }
 
-// XXX: deprecated
+// FIXME: deprecated
 Configuration* Configuration::sharedConfiguration()
 {
     return Configuration::getInstance();
 }
 
-// XXX: deprecated
+// FIXME: deprecated
 void Configuration::purgeConfiguration()
 {
     Configuration::destroyInstance();
@@ -181,7 +199,7 @@ bool Configuration::checkForGLExtension(const std::string &searchName) const
 
 //
 // getters for specific variables.
-// Mantained for backward compatiblity reasons only.
+// Maintained for backward compatibility reasons only.
 //
 int Configuration::getMaxTextureSize() const
 {
@@ -220,7 +238,11 @@ bool Configuration::supportsETC() const
 
 bool Configuration::supportsS3TC() const
 {
+#ifdef GL_EXT_texture_compression_s3tc
     return _supportsS3TC;
+#else
+    return false;
+#endif
 }
 
 bool Configuration::supportsATITC() const
@@ -245,6 +267,39 @@ bool Configuration::supportsShareableVAO() const
 #else
     return false;
 #endif
+}
+
+
+bool Configuration::supportsOESDepth24() const
+{
+    return _supportsOESDepth24;
+    
+}
+bool Configuration::supportsOESPackedDepthStencil() const
+{
+    return _supportsOESPackedDepthStencil;
+}
+
+
+
+int Configuration::getMaxSupportDirLightInShader() const
+{
+    return _maxDirLightInShader;
+}
+
+int Configuration::getMaxSupportPointLightInShader() const
+{
+    return _maxPointLightInShader;
+}
+
+int Configuration::getMaxSupportSpotLightInShader() const
+{
+    return _maxSpotLightInShader;
+}
+
+Animate3DQuality Configuration::getAnimate3DQuality() const
+{
+    return _animate3DQuality;
 }
 
 //
@@ -316,6 +371,33 @@ void Configuration::loadConfigFile(const std::string& filename)
         else
             CCLOG("Key already present. Ignoring '%s'",dataMapIter->first.c_str());
     }
+    
+    //light info
+    std::string name = "cocos2d.x.3d.max_dir_light_in_shader";
+	if (_valueDict.find(name) != _valueDict.end())
+        _maxDirLightInShader = _valueDict[name].asInt();
+    else
+        _valueDict[name] = Value(_maxDirLightInShader);
+    
+    name = "cocos2d.x.3d.max_point_light_in_shader";
+	if (_valueDict.find(name) != _valueDict.end())
+        _maxPointLightInShader = _valueDict[name].asInt();
+    else
+        _valueDict[name] = Value(_maxPointLightInShader);
+    
+    name = "cocos2d.x.3d.max_spot_light_in_shader";
+	if (_valueDict.find(name) != _valueDict.end())
+        _maxSpotLightInShader = _valueDict[name].asInt();
+    else
+        _valueDict[name] = Value(_maxSpotLightInShader);
+    
+    name = "cocos2d.x.3d.animate_quality";
+    if (_valueDict.find(name) != _valueDict.end())
+        _animate3DQuality = (Animate3DQuality)_valueDict[name].asInt();
+    else
+        _valueDict[name] = Value((int)_animate3DQuality);
+    
+    Director::getInstance()->getEventDispatcher()->dispatchEvent(_loadedEvent);
 }
 
 NS_CC_END

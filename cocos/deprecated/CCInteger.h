@@ -1,5 +1,5 @@
 /****************************************************************************
- Copyright (c) 2013-2014 Chukong Technologies
+ Copyright (c) 2013-2015 Chukong Technologies
 
  http://www.cocos2d-x.org
 
@@ -24,10 +24,12 @@
 
 #ifndef __CCINTEGER_H__
 #define __CCINTEGER_H__
+/// @cond DO_NOT_SHOW
 
 #include "base/CCRef.h"
+#include "base/CCConsole.h"
 #include "base/CCDataVisitor.h"
-#include "2d/platform/CCCommon.h"
+#include "platform/CCCommon.h"
 
 NS_CC_BEGIN
 
@@ -41,7 +43,7 @@ class CC_DLL __Integer : public Ref, public Clonable
 public:
     static __Integer* create(int v)
     {
-        __Integer* pRet = new __Integer(v);
+        __Integer* pRet = new (std::nothrow) __Integer(v);
         pRet->autorelease();
         return pRet;
     }
@@ -77,4 +79,5 @@ private:
 
 NS_CC_END
 
+/// @endcond
 #endif /* __CCINTEGER_H__ */

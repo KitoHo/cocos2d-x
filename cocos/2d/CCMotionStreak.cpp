@@ -23,16 +23,15 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ****************************************************************************/
+
 #include "2d/CCMotionStreak.h"
-#include "2d/CCTextureCache.h"
-#include "2d/CCVertex.h"
-#include "renderer/ccGLStateCache.h"
-#include "renderer/CCGLProgram.h"
-#include "renderer/CCGLProgramState.h"
-#include "renderer/CCCustomCommand.h"
-#include "renderer/CCRenderer.h"
-#include "base/ccMacros.h"
+#include "math/CCVertex.h"
 #include "base/CCDirector.h"
+#include "renderer/CCTextureCache.h"
+#include "renderer/ccGLStateCache.h"
+#include "renderer/CCTexture2D.h"
+#include "renderer/CCRenderer.h"
+#include "renderer/CCGLProgramState.h"
 
 NS_CC_BEGIN
 
@@ -41,7 +40,6 @@ MotionStreak::MotionStreak()
 , _startingPositionInitialized(false)
 , _texture(nullptr)
 , _blendFunc(BlendFunc::ALPHA_NON_PREMULTIPLIED)
-, _positionR(Vec2::ZERO)
 , _stroke(0.0f)
 , _fadeDelta(0.0f)
 , _minSeg(0.0f)
@@ -68,7 +66,7 @@ MotionStreak::~MotionStreak()
 
 MotionStreak* MotionStreak::create(float fade, float minSeg, float stroke, const Color3B& color, const std::string& path)
 {
-    MotionStreak *ret = new MotionStreak();
+    MotionStreak *ret = new (std::nothrow) MotionStreak();
     if (ret && ret->initWithFade(fade, minSeg, stroke, color, path))
     {
         ret->autorelease();
@@ -81,7 +79,7 @@ MotionStreak* MotionStreak::create(float fade, float minSeg, float stroke, const
 
 MotionStreak* MotionStreak::create(float fade, float minSeg, float stroke, const Color3B& color, Texture2D* texture)
 {
-    MotionStreak *ret = new MotionStreak();
+    MotionStreak *ret = new (std::nothrow) MotionStreak();
     if (ret && ret->initWithFade(fade, minSeg, stroke, color, texture))
     {
         ret->autorelease();
@@ -104,10 +102,10 @@ bool MotionStreak::initWithFade(float fade, float minSeg, float stroke, const Co
 {
     Node::setPosition(Vec2::ZERO);
     setAnchorPoint(Vec2::ZERO);
-    ignoreAnchorPointForPosition(true);
+    setIgnoreAnchorPointForPosition(true);
     _startingPositionInitialized = false;
 
-    _positionR = Vec2::ZERO;
+    _positionR.setZero();
     _fastMode = true;
     _minSeg = (minSeg == -1.0f) ? stroke/5.0f : minSeg;
     _minSeg *= _minSeg;
@@ -168,6 +166,11 @@ void MotionStreak::getPosition(float* x, float* y) const
 float MotionStreak::getPositionX() const
 {
     return _positionR.x;
+}
+
+Vec3 MotionStreak::getPosition3D() const
+{
+    return Vec3(_positionR.x, _positionR.y, getPositionZ());
 }
 
 void MotionStreak::setPositionX(float x)
@@ -373,7 +376,7 @@ void MotionStreak::reset()
     _nuPoints = 0;
 }
 
-void MotionStreak::onDraw(const Mat4 &transform, bool transformUpdated)
+void MotionStreak::onDraw(const Mat4 &transform, uint32_t flags)
 {  
     getGLProgram()->use();
     getGLProgram()->setUniformsForBuiltins(transform);
@@ -383,34 +386,21 @@ void MotionStreak::onDraw(const Mat4 &transform, bool transformUpdated)
 
     GL::bindTexture2D( _texture->getName() );
 
-#ifdef EMSCRIPTEN
-    // Size calculations from ::initWithFade
-    setGLBufferData(_vertices, (sizeof(Vec2) * _maxPoints * 2), 0);
-    glVertexAttribPointer(GLProgram::VERTEX_ATTRIB_POSITION, 2, GL_FLOAT, GL_FALSE, 0, 0);
-
-    setGLBufferData(_texCoords, (sizeof(Tex2F) * _maxPoints * 2), 1);
-    glVertexAttribPointer(GLProgram::VERTEX_ATTRIB_TEX_COORD, 2, GL_FLOAT, GL_FALSE, 0, 0);
-
-    setGLBufferData(_colorPointer, (sizeof(GLubyte) * _maxPoints * 2 * 4), 2);
-    glVertexAttribPointer(GLProgram::VERTEX_ATTRIB_COLOR, 4, GL_UNSIGNED_BYTE, GL_TRUE, 0, 0);
-#else
     glVertexAttribPointer(GLProgram::VERTEX_ATTRIB_POSITION, 2, GL_FLOAT, GL_FALSE, 0, _vertices);
     glVertexAttribPointer(GLProgram::VERTEX_ATTRIB_TEX_COORD, 2, GL_FLOAT, GL_FALSE, 0, _texCoords);
     glVertexAttribPointer(GLProgram::VERTEX_ATTRIB_COLOR, 4, GL_UNSIGNED_BYTE, GL_TRUE, 0, _colorPointer);
-#endif // EMSCRIPTEN
 
     glDrawArrays(GL_TRIANGLE_STRIP, 0, (GLsizei)_nuPoints*2);
     CC_INCREMENT_GL_DRAWN_BATCHES_AND_VERTICES(1, _nuPoints*2);
 }
 
-void MotionStreak::draw(Renderer *renderer, const Mat4 &transform, bool transformUpdated)
+void MotionStreak::draw(Renderer *renderer, const Mat4 &transform, uint32_t flags)
 {
     if(_nuPoints <= 1)
         return;
-    _customCommand.init(_globalZOrder);
-    _customCommand.func = CC_CALLBACK_0(MotionStreak::onDraw, this, transform, transformUpdated);
+    _customCommand.init(_globalZOrder, transform, flags);
+    _customCommand.func = CC_CALLBACK_0(MotionStreak::onDraw, this, transform, flags);
     renderer->addCommand(&_customCommand);
 }
 
 NS_CC_END
-

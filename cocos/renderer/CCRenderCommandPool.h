@@ -1,5 +1,5 @@
 /****************************************************************************
- Copyright (c) 2013-2014 Chukong Technologies Inc.
+ Copyright (c) 2013-2015 Chukong Technologies Inc.
 
  http://www.cocos2d-x.org
 
@@ -22,13 +22,14 @@
  THE SOFTWARE.
  ****************************************************************************/
 
-
 #ifndef __CC_RENDERCOMMANDPOOL_H__
 #define __CC_RENDERCOMMANDPOOL_H__
+/// @cond DO_NOT_SHOW
 
-#include <set>
 #include <list>
-#include "base/CCPlatformMacros.h"
+
+#include "platform/CCPlatformMacros.h"
+
 NS_CC_BEGIN
 
 template <class T>
@@ -82,7 +83,7 @@ private:
     void AllocateCommands()
     {
         static const int COMMANDS_ALLOCATE_BLOCK_SIZE = 32;
-        T* commands = new T[COMMANDS_ALLOCATE_BLOCK_SIZE];
+        T* commands = new (std::nothrow) T[COMMANDS_ALLOCATE_BLOCK_SIZE];
         _allocatedPoolBlocks.push_back(commands);
         for(int index = 0; index < COMMANDS_ALLOCATE_BLOCK_SIZE; ++index)
         {
@@ -97,4 +98,5 @@ private:
 
 NS_CC_END
 
+/// @endcond
 #endif

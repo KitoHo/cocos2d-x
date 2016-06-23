@@ -26,23 +26,100 @@ THE SOFTWARE.
 #define __LAYOUT_H__
 
 #include "ui/UIWidget.h"
-
-NS_CC_BEGIN
-
-namespace ui {
+#include "ui/GUIExport.h"
+#include "renderer/CCCustomCommand.h"
+#include "renderer/CCGroupCommand.h"
 
 /**
- *  @js NA
- *  @lua NA
+ * @addtogroup ui
+ * @{
  */
-class LayoutExecutant;
+NS_CC_BEGIN
+
+class DrawNode;
+class LayerColor;
+class LayerGradient;
+class StencilStateManager;
+struct CC_DLL ResourceData;
+
+namespace ui {
     
-class Layout : public Widget
+class LayoutManager;
+class Scale9Sprite;
+
+/**
+ *@brief Layout interface for creating LayoutManger and do actual layout.
+ * @js NA
+ */
+class CC_GUI_DLL LayoutProtocol
+{
+public:
+    /**
+     *@brief Default constructor.
+     */
+    LayoutProtocol(){}
+    /**
+     *@brief Default destructor.
+     */
+    virtual ~LayoutProtocol(){}
+
+    
+    /**
+     * @brief Create a custom layout manager.
+     *
+     * @return A LayoutManager descendants instance.
+     */
+    virtual LayoutManager* createLayoutManager() = 0;
+    
+    /**
+     * @brief Return the content size of layout.
+     *
+     * @return A content size in Size.
+     */
+    virtual Size getLayoutContentSize()const = 0;
+    
+    /**
+     * @brief Get all elements of the layout.
+     *
+     * @return A vector of Node pointers.
+     */
+    virtual const Vector<Node*>& getLayoutElements()const = 0;
+    
+    /**
+     * @brief The main function to do the layout job.
+     *  Different layout manager should implement its own layout algorithm.
+     *
+     */
+    virtual void doLayout() = 0;
+};
+
+#if (CC_TARGET_PLATFORM == CC_PLATFORM_WINRT)
+#ifdef RELATIVE
+#undef RELATIVE
+#endif
+#endif
+
+/**
+ *@brief A container for holding a few child widgets. 
+ *
+ * The child widgets could be rearranged according to the layout type and it also enables clipping, set background image and color.
+ *
+ * There are mainly four types of layout:
+ * - Absolute layout: This the default layout type, child elements are arranged by their absolute position.
+ * - Horizontal layout: child elements are arranged horizontally.
+ * - Vertical layout: child elements are arranged vertically.
+ * - Relative layout: child elements are arranged relative to certain rules.
+ *
+ */
+class CC_GUI_DLL Layout : public Widget, public LayoutProtocol
 {
     
     DECLARE_CLASS_GUI_INFO
     
 public:
+    /**
+     * Layout type, default is ABSOLUTE.
+     */
     enum class Type
     {
         ABSOLUTE,
@@ -51,12 +128,18 @@ public:
         RELATIVE
     };
     
+    /**
+     * Clipping Type, default is STENCIL.
+     */
     enum class ClippingType
     {
         STENCIL,
         SCISSOR
     };
     
+    /**
+     * Background color type, default is NONE.
+     */
     enum class BackGroundColorType
     {
         NONE,
@@ -66,104 +149,156 @@ public:
     
     /**
      * Default constructor
+     * @js ctor
+     * @lua new
      */
     Layout();
     
     /**
      * Default destructor
+     * @js NA
+     * @lua NA
      */
     virtual ~Layout();
     
     /**
-     * Allocates and initializes a layout.
+     * Create a empty layout.
      */
     static Layout* create();
     
-    //background
     /**
-     * Sets a background image for layout
+     * Sets a background image for layout.
      *
      * @param fileName image file path.
-     *
-     * @param texType @see TextureResType. UI_TEX_TYPE_LOCAL means local file, UI_TEX_TYPE_PLIST means sprite frame.
+     * @param texType @see TextureResType. 
      */
     void setBackGroundImage(const std::string& fileName,TextureResType texType = TextureResType::LOCAL);
     
     /**
-     * Sets a background image capinsets for layout, if the background image is a scale9 render.
+     * Sets a background image capinsets for layout, it only affects the scale9 enabled background image
      *
-     * @param capinsets of background image.
+     * @param capInsets  The capInsets in Rect.
      *
      */
     void setBackGroundImageCapInsets(const Rect& capInsets);
     
-    const Rect& getBackGroundImageCapInsets();
+    /**
+     * Query background image's capInsets size.
+     *@return The background image capInsets.
+     */
+    const Rect& getBackGroundImageCapInsets()const;
     
     /**
-     * Sets Color Type for layout.
+     * Sets Color Type for layout's background
      *
-     * @param type   @see LayoutBackGroundColorType.
+     * @param type   @see `BackGroundColorType`
      */
     void setBackGroundColorType(BackGroundColorType type);
     
-    BackGroundColorType getBackGroundColorType();
+    /**
+     * Query the layout's background color type.
+     *@return The layout's background color type.
+     */
+    BackGroundColorType getBackGroundColorType()const;
     
     /**
-     * Sets background iamge use scale9 renderer.
+     * Enable background image scale9 rendering.
      *
-     * @param enabled   true that use scale9 renderer, false otherwise.
+     * @param enabled  True means enable scale9 rendering for background image, false otherwise.
      */
     void setBackGroundImageScale9Enabled(bool enabled);
     
-    bool isBackGroundImageScale9Enabled();
+    /**
+     * Query background image scale9 enable status.
+     *@return Whether background image is scale9 enabled or not.
+     */
+    bool isBackGroundImageScale9Enabled()const;
     
     /**
-     * Sets background color for layout, if color type is LAYOUT_COLOR_SOLID
+     * Set background color for layout
+     * The color only applies to layout when it's color type is BackGroundColorType::SOLIDE
      *
-     * @param color
+     * @param color Color in Color3B.
      */
     void setBackGroundColor(const Color3B &color);
     
-    const Color3B& getBackGroundColor();
+    /**
+     * Query the layout's background color.
+     *@return Background color in Color3B.
+     */
+    const Color3B& getBackGroundColor()const;
     
     /**
-     * Sets background color for layout, if color type is LAYOUT_COLOR_GRADIENT
+     * Set start and end background color for layout.
+     * This setting only take effect when the layout's  color type is BackGroundColorType::GRADIENT
      *
-     * @param start color
-     *
-     * @param end color
+     * @param startColor Color value in Color3B.
+     * @param endColor Color value in Color3B.
      */
     void setBackGroundColor(const Color3B &startColor, const Color3B &endColor);
     
-    const Color3B& getBackGroundStartColor();
-    
-    const Color3B& getBackGroundEndColor();
+    /**
+     * Get the gradient background start color.
+     *@return  Gradient background start color value.
+     */
+    const Color3B& getBackGroundStartColor()const;
     
     /**
-     * Sets background opacity layout.
+     * Get the gradient background end color.
+     * @return Gradient background end color value.
+     */
+    const Color3B& getBackGroundEndColor()const;
+    
+    /**
+     * Sets background color opacity of layout.
      *
-     * @param opacity
+     * @param opacity The opacity in `GLubyte`.
      */
     void setBackGroundColorOpacity(GLubyte opacity);
     
-    GLubyte getBackGroundColorOpacity();
+    /**
+     * Get the layout's background color opacity.
+     *@return Background color opacity value.
+     */
+    GLubyte getBackGroundColorOpacity()const;
     
     /**
-     * Sets background color vector for layout, if color type is LAYOUT_COLOR_GRADIENT
+     * Sets background color vector for layout.
+     * This setting only take effect when layout's color type is BackGroundColorType::GRADIENT
      *
-     * @param vector
+     * @param vector The color vector in `Vec2`.
      */
     void setBackGroundColorVector(const Vec2 &vector);
     
-    const Vec2& getBackGroundColorVector();
+    /**
+     * Get the layout's background color vector.
+     *@return Background color vector.
+     */
+    const Vec2& getBackGroundColorVector()const;
     
+    /**
+     * Set layout's background image color.
+     *@param color Background color value in `Color3B`.
+     */
     void setBackGroundImageColor(const Color3B& color);
     
+    /**
+     * Set opacity of background image.
+     *@param opacity Background image opacity in GLubyte.
+     */
     void setBackGroundImageOpacity(GLubyte opacity);
     
-    const Color3B& getBackGroundImageColor();
+    /**
+     * Get color of layout's background image.
+     *@return Layout's background image color.
+     */
+    const Color3B& getBackGroundImageColor()const;
     
-    GLubyte getBackGroundImageOpacity();
+    /**
+     * Get the opacity of layout's background image.
+     * @return The opacity of layout's background image.
+     */
+    GLubyte getBackGroundImageOpacity()const;
     
     /**
      * Remove the background image of layout.
@@ -178,57 +313,69 @@ public:
     const Size& getBackGroundImageTextureSize() const;
     
     /**
-     * Changes if layout can clip it's content and child.
+     * Toggle layout clipping.
      *
-     * If you really need this, please enable it. But it would reduce the rendering efficiency. 
+     * If you do need clipping, you pass true to this function.
      *
-     * @param clipping enabled.
+     * @param enabled Pass true to enable clipping, false otherwise.
      */
     virtual void setClippingEnabled(bool enabled);
     
-    void setClippingType(ClippingType type);
     
-    ClippingType getClippingType();
+    /**
+     * Change the clipping type of layout.
+     * On default, the clipping type is `ClippingType::STENCIL`.
+     * @see `ClippingType`
+     *@param type The clipping type of layout.
+     */
+    void setClippingType(ClippingType type);
+
+    /**
+     *
+     * @see `setClippingType(ClippingType)`
+     */
+    ClippingType getClippingType()const;
     
     /**
      * Gets if layout is clipping enabled.
      *
      * @return if layout is clipping enabled.
      */
-    virtual bool isClippingEnabled();
+    virtual bool isClippingEnabled()const;
     
     /**
      * Returns the "class name" of widget.
      */
     virtual std::string getDescription() const override;
     
-
+    /**
+     * Change the layout type.
+     *@param type Layout type.
+     */
     virtual void setLayoutType(Type type);
     
+    /**
+     * Query layout type.
+     *@return Get the layout type.
+     */
     virtual  Type getLayoutType() const;
 
-    virtual void addChild(Node * child) override;
-    /**
-     * Adds a child to the container with a z-order
-     *
-     * If the child is added to a 'running' node, then 'onEnter' and 'onEnterTransitionDidFinish' will be called immediately.
-     *
-     * @param child     A child node
-     * @param zOrder    Z order for drawing priority. Please refer to setLocalZOrder(int)
-     */
-    virtual void addChild(Node * child, int zOrder) override;
+    
+    virtual void addChild(Node* child)override;
+    virtual void addChild(Node * child, int localZOrder)override;
     /**
      * Adds a child to the container with z order and tag
      *
      * If the child is added to a 'running' node, then 'onEnter' and 'onEnterTransitionDidFinish' will be called immediately.
      *
      * @param child     A child node
-     * @param zOrder    Z order for drawing priority. Please refer to setLocalZOrder(int)
-     * @param tag       A interger to identify the node easily. Please refer to setTag(int)
+     * @param localZOrder    Z order for drawing priority. Please refer to setLocalZOrder(int)
+     * @param tag       A integer to identify the node easily. Please refer to setTag(int)
      */
-    virtual void addChild(Node* child, int zOrder, int tag) override;
+    virtual void addChild(Node* child, int localZOrder, int tag) override;
+    virtual void addChild(Node* child, int localZOrder, const std::string &name) override;
     
-    virtual void visit(Renderer *renderer, const Mat4 &parentTransform, bool parentTransformUpdated) override;
+    virtual void visit(Renderer *renderer, const Mat4 &parentTransform, uint32_t parentFlags) override;
 
     virtual void removeChild(Node* child, bool cleanup = true) override;
     
@@ -241,17 +388,30 @@ public:
     /**
      * Removes all children from the container, and do a cleanup to all running actions depending on the cleanup parameter.
      *
-     * @param cleanup   true if all running actions on all children nodes should be cleanup, false oterwise.
+     * @param cleanup   true if all running actions on all children nodes should be cleanup, false otherwise.
      * @js removeAllChildren
      * @lua removeAllChildren
      */
     virtual void removeAllChildrenWithCleanup(bool cleanup) override;
 
-    virtual void sortAllChildren() override;
+    /**
+     * force refresh widget layout
+     */
+    virtual void forceDoLayout();
     
-    void requestDoLayout();
+    /**
+     * request to refresh widget layout
+     */
+    virtual void requestDoLayout();
     
+    /**
+     * @lua NA
+     */
     virtual void onEnter() override;
+    
+    /**
+     * @lua NA
+     */
     virtual void onExit() override;
     
     /**
@@ -263,7 +423,7 @@ public:
     /**
      *@return If focus loop is enabled, then it will return true, otherwise it returns false. The default value is false.
      */
-    bool isLoopFocus();
+    bool isLoopFocus()const;
     
     /**
      *@param pass To specify whether the layout pass its focus to its child
@@ -273,12 +433,12 @@ public:
     /**
      * @return To query whether the layout will pass the focus to its children or not. The default value is true
      */
-    bool isPassFocusToChild();
+    bool isPassFocusToChild()const;
     
     /**
      *  When a widget is in a layout, you could call this method to get the next focused widget within a specified direction.
      *  If the widget is not in a layout, it will return itself
-     *@param dir the direction to look for the next focused widget in a layout
+     *@param direction the direction to look for the next focused widget in a layout
      *@param current  the current focused widget
      *@return the next focused widget in a layout
      */
@@ -291,6 +451,15 @@ public:
      * @return return the index of widget in the layout
      */
     std::function<int(FocusDirection, Widget*)> onPassFocusToChild;
+    
+    /** 
+     * Override function. Set camera mask, the node is visible by the camera whose camera flag & node's camera mask is true. 
+     * @param mask Mask being set
+     * @param applyChildren If true call this function recursively from this node to its children.
+     */
+    virtual void setCameraMask(unsigned short mask, bool applyChildren = true) override;
+
+    ResourceData getRenderFile();
 
 CC_CONSTRUCTOR_ACCESS:
     //override "init" method of widget.
@@ -308,29 +477,29 @@ protected:
     virtual void copySpecialProperties(Widget* model) override;
     virtual void copyClonedWidgetChildren(Widget* model) override;
     
-    void stencilClippingVisit(Renderer *renderer, const Mat4& parentTransform, bool parentTransformUpdated);
-    void scissorClippingVisit(Renderer *renderer, const Mat4& parentTransform, bool parentTransformUpdated);
+    void stencilClippingVisit(Renderer *renderer, const Mat4 &parentTransform, uint32_t parentFlags);
+    void scissorClippingVisit(Renderer *renderer, const Mat4 &parentTransform, uint32_t parentFlags);
     
     void setStencilClippingSize(const Size& size);
     const Rect& getClippingRect();
-    virtual void doLayout();
+    
+    virtual void doLayout()override;
+    virtual LayoutManager* createLayoutManager()override;
+    virtual Size getLayoutContentSize()const override;
+    virtual const Vector<Node*>& getLayoutElements()const override;
     
     //clipping
-    void onBeforeVisitStencil();
-    void onAfterDrawStencil();
-    void onAfterVisitStencil();
     
     void onBeforeVisitScissor();
     void onAfterVisitScissor();
     void updateBackGroundImageColor();
     void updateBackGroundImageOpacity();
     void updateBackGroundImageRGBA();
-    LayoutExecutant* createCurrentLayoutExecutant();
     
     /**
      *get the content size of the layout, it will accumulate all its children's content size
      */
-    Size getLayoutContentSize() const;
+    Size getLayoutAccumulatedSize() const;
     
     /**
      * When the layout get focused, it the layout pass the focus to its child, it will use this method to determine which child 
@@ -342,29 +511,29 @@ protected:
     
     /**
      * When the layout get focused, it the layout pass the focus to its child, it will use this method to determine which child
-     * will get the focus.  The current algorithm to determine which child will get focus is farest-distance-priority algorithm
+     * will get the focus.  The current algorithm to determine which child will get focus is farthest-distance-priority algorithm
      *@param dir next focused widget direction
      *@return The index of child widget in the container
      */
-    int findFarestChildWidgetIndex(FocusDirection direction, Widget* baseWidget);
+    int findFarthestChildWidgetIndex(FocusDirection direction, Widget* baseWidget);
     
     /**
-     * caculate the nearest distance between the baseWidget and the children of the layout
-     *@param the base widget which will be used to caculate the distance between the layout's children and itself
+     * calculate the nearest distance between the baseWidget and the children of the layout
+     *@param the base widget which will be used to calculate the distance between the layout's children and itself
      *@return return the nearest distance between the baseWidget and the layout's children
      */
-    float caculateNearestDistance(Widget* baseWidget);
+    float calculateNearestDistance(Widget* baseWidget);
     
     /**
-     * caculate the farest distance between the baseWidget and the children of the layout
-     *@param the base widget which will be used to caculate the distance between the layout's children and itself
-     *@return return the farest distance between the baseWidget and the layout's children
+     * calculate the farthest distance between the baseWidget and the children of the layout
+     *@param the base widget which will be used to calculate the distance between the layout's children and itself
+     *@return return the farthest distance between the baseWidget and the layout's children
      */
 
-    float caculateFarestDistance(Widget* baseWidget);
+    float calculateFarthestDistance(Widget* baseWidget);
     
     /**
-     *  when a layout pass the focus to it's child, use this method to determine which algorithm to use, nearest or farest distance algorithm or not
+     *  when a layout pass the focus to it's child, use this method to determine which algorithm to use, nearest or farthest distance algorithm or not
      */
     void findProperSearchingFunctor(FocusDirection dir, Widget* baseWidget);
     
@@ -374,7 +543,7 @@ protected:
     Widget *findFirstNonLayoutWidget();
     
     /**
-     * find the fisrt focus enabled widget index in the layout, it will recusive searching the child widget
+     * find the first focus enabled widget index in the layout, it will recursive searching the child widget
      */
     int findFirstFocusEnabledWidgetIndex();
     
@@ -386,7 +555,7 @@ protected:
     /**
      * get the center point of a widget in world space
      */
-    Vec2 getWorldCenterPoint(Widget* node);
+    Vec2 getWorldCenterPoint(Widget* node)const;
     
     /**
      * this method is called internally by nextFocusedWidget. When the dir is Right/Down, then this method will be called
@@ -405,20 +574,20 @@ protected:
     Widget* getPreviousFocusedWidget(FocusDirection direction, Widget *current);
     
     /**
-     * find the nth elment in the _children array. Only the Widget descendant object will be returned
+     * find the nth element in the _children array. Only the Widget descendant object will be returned
      *@param index  The index of a element in the _children array
      */
-    Widget* getChildWidgetByIndex(ssize_t index);
+    Widget* getChildWidgetByIndex(ssize_t index)const;
     /**
      * whether it is the last element according to all their parents
      */
-    bool  isLastWidgetInContainer(Widget* widget, FocusDirection direction);
+    bool  isLastWidgetInContainer(Widget* widget, FocusDirection direction)const;
     
     /**Lookup any parent widget with a layout type as the direction,
      * if the layout is loop focused, then return true, otherwise
      * It returns false
      */
-    bool  isWidgetAncestorSupportLoopFocus(Widget* widget, FocusDirection direction);
+    bool  isWidgetAncestorSupportLoopFocus(Widget* widget, FocusDirection direction)const;
     
     /**
      * pass the focus to the layout's next focus enabled child
@@ -428,18 +597,21 @@ protected:
     /**
      * If there are no focus enabled child in the layout, it will return false, otherwise it returns true
      */
-    bool checkFocusEnabledChild();
+    bool checkFocusEnabledChild()const;
     
 protected:
-    bool _clippingEnabled;
     
     //background
     bool _backGroundScale9Enabled;
-    Node* _backGroundImage;
+    Scale9Sprite* _backGroundImage;
     std::string _backGroundImageFileName;
     Rect _backGroundImageCapInsets;
     BackGroundColorType _colorType;
     TextureResType _bgImageTexType;
+    Size _backGroundImageTextureSize;
+    Color3B _backGroundImageColor;
+    GLubyte _backGroundImageOpacity;
+
     LayerColor* _colorRender;
     LayerGradient* _gradientRender;
     Color3B _cColor;
@@ -447,39 +619,21 @@ protected:
     Color3B _gEndColor;
     Vec2 _alongVector;
     GLubyte _cOpacity;
-    Size _backGroundImageTextureSize;
+    
+    //clipping
+    bool _clippingEnabled;
     Type _layoutType;
     ClippingType _clippingType;
     DrawNode* _clippingStencil;
-    bool _scissorRectDirty;
+    bool _scissorOldState;
+    Rect _clippingOldRect;
     Rect _clippingRect;
     Layout* _clippingParent;
-    bool _doLayoutDirty;
     bool _clippingRectDirty;
     
     //clipping
+    StencilStateManager *_stencileStateManager;
 
-    GLboolean _currentStencilEnabled;
-    GLuint _currentStencilWriteMask;
-    GLenum _currentStencilFunc;
-    GLint _currentStencilRef;
-    GLuint _currentStencilValueMask;
-    GLenum _currentStencilFail;
-    GLenum _currentStencilPassDepthFail;
-    GLenum _currentStencilPassDepthPass;
-    GLboolean _currentDepthWriteMask;
-    
-    GLboolean _currentAlphaTestEnabled;
-    GLenum _currentAlphaTestFunc;
-    GLclampf _currentAlphaTestRef;
-    
-    
-    Color3B _backGroundImageColor;
-    GLubyte _backGroundImageOpacity;
-    
-    LayoutExecutant* _curLayoutExecutant;
-    
-    GLint _mask_layer_le;
     GroupCommand _groupCommand;
     CustomCommand _beforeVisitCmdStencil;
     CustomCommand _afterDrawStencilCmd;
@@ -487,10 +641,19 @@ protected:
     CustomCommand _beforeVisitCmdScissor;
     CustomCommand _afterVisitCmdScissor;
     
-    bool _loopFocus; //whether enable loop focus or not
-    bool _passFocusToChild;  //on default, it will pass the focus to the next nearest widget
+    bool _doLayoutDirty;
+    bool _isInterceptTouch;
+    
+    //whether enable loop focus or not
+    bool _loopFocus;
+    //on default, it will pass the focus to the next nearest widget
+    bool _passFocusToChild;
+     //when finding the next focused widget, use this variable to pass focus between layout & widget
+    bool _isFocusPassing;
 };
     
 }
 NS_CC_END
+// end of ui group
+/// @}
 #endif /* defined(__Layout__) */

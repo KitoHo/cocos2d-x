@@ -1,4 +1,4 @@
-/****************************************************************************
+﻿/****************************************************************************
 Copyright (c) 2013-2014 Chukong Technologies Inc.
 
 http://www.cocos2d-x.org
@@ -28,12 +28,13 @@ THE SOFTWARE.
 #include "2d/CCSprite.h"
 #include "renderer/CCQuadCommand.h"
 
-#include "cocostudio/CCArmatureDefine.h"
-#include "cocostudio/CCBone.h"
+#include "editor-support/cocostudio/CCArmatureDefine.h"
+#include "editor-support/cocostudio/CCBone.h"
+#include "editor-support/cocostudio/CocosStudioExport.h"
 
 namespace cocostudio {
 
-class Skin : public cocos2d::Sprite
+class CC_STUDIO_DLL Skin : public cocos2d::Sprite
 {
 public:
     static Skin *create();
@@ -54,7 +55,7 @@ public:
     cocos2d::Mat4 getNodeToWorldTransform() const override;
     cocos2d::Mat4 getNodeToWorldTransformAR() const;
     
-    virtual void draw(cocos2d::Renderer *renderer, const cocos2d::Mat4 &transform, bool transformUpdated) override;
+    virtual void draw(cocos2d::Renderer *renderer, const cocos2d::Mat4 &transform, uint32_t flags) override;
     
     /**
      *  @js NA

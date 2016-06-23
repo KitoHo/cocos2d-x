@@ -26,16 +26,23 @@ THE SOFTWARE.
 #define __UILABELBMFONT_H__
 
 #include "ui/UIWidget.h"
+#include "ui/GUIExport.h"
 
+/**
+ * @addtogroup ui
+ * @{
+ */
 NS_CC_BEGIN
+
+class Label;
+struct CC_DLL ResourceData;
 
 namespace ui {
     
 /**
-*   @js NA
-*   @lua NA
-*/    
-class TextBMFont : public Widget
+ * A widget for displaying BMFont label.
+ */    
+class CC_GUI_DLL TextBMFont : public Widget
 {
     
     DECLARE_CLASS_GUI_INFO
@@ -43,11 +50,15 @@ class TextBMFont : public Widget
 public:
     /**
      * Default constructor
+     * @js ctor
+     * @lua new
      */
     TextBMFont();
     
     /**
      * Default destructor
+     * @js NA
+     * @lua NA
      */
     virtual ~TextBMFont();
     
@@ -78,25 +89,29 @@ public:
      */
     ssize_t getStringLength()const;
 
-    virtual const Size& getVirtualRendererSize() const override;
+    virtual Size getVirtualRendererSize() const override;
     virtual Node* getVirtualRenderer() override;
     /**
      * Returns the "class name" of widget.
      */
     virtual std::string getDescription() const override;
+
+    ResourceData getRenderFile();
+
+    /**
+    * reset TextBMFont inner label
+    */
+    void resetRender();
 protected:
     virtual void initRenderer() override;
     virtual void onSizeChanged() override;
-    virtual void updateTextureColor() override;
-    virtual void updateTextureOpacity() override;
-    virtual void updateTextureRGBA() override;
+   
     void labelBMFontScaleChangedWithSize();
     virtual Widget* createCloneInstance() override;
     virtual void copySpecialProperties(Widget* model) override;
     virtual void adaptRenderers() override;
 protected:
-    cocos2d::Label* _labelBMFontRenderer;
-    bool _fntFileHasInit;
+    Label* _labelBMFontRenderer;
     std::string _fntFileName;
     std::string _stringValue;
     bool _labelBMFontRendererAdaptDirty;
@@ -104,5 +119,7 @@ protected:
     
 }
 NS_CC_END
+// end of ui group
+/// @}
 
 #endif /* defined(__LabelBMFont__) */

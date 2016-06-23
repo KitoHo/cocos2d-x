@@ -4,8 +4,12 @@
 #include <vector>
 #include <string>
 #include <stdio.h>
+#ifdef OPENAL_PLAIN_INCLUDES
+#include <al.h>
+#else
 #include <AL/al.h>
-#include "cocos2d.h"
+#endif
+
 
 #if CC_TARGET_PLATFORM == CC_PLATFORM_TIZEN
 #define DISABLE_VORBIS

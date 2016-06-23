@@ -1,5 +1,5 @@
 /****************************************************************************
-Copyright (c) 2013-2014 Chukong Technologies Inc.
+Copyright (c) 2013-2016 Chukong Technologies Inc.
 
 http://www.cocos2d-x.org
 
@@ -25,203 +25,388 @@ THE SOFTWARE.
 #ifndef __UIPAGEVIEW_H__
 #define __UIPAGEVIEW_H__
 
-#include "ui/UILayout.h"
-#include "ui/UIScrollInterface.h"
+#include "ui/UIListView.h"
+#include "ui/GUIExport.h"
 
+/**
+ * @addtogroup ui
+ * @{
+ */
 NS_CC_BEGIN
 
 namespace ui {
 
-CC_DEPRECATED_ATTRIBUTE typedef enum
+class PageViewIndicator;
+
+/**
+ *PageView page turn event type.
+ *@deprecated Use `PageView::EventType` instead.
+ */
+typedef enum
 {
     PAGEVIEW_EVENT_TURNING,
 }PageViewEventType;
 
-CC_DEPRECATED_ATTRIBUTE typedef void (Ref::*SEL_PageViewEvent)(Ref*, PageViewEventType);
+/**
+ *A callback which would be called when a PageView turning event is happening.
+ *@deprecated Use `PageView::ccPageViewCallback` instead.
+ */
+typedef void (Ref::*SEL_PageViewEvent)(Ref*, PageViewEventType);
 #define pagevieweventselector(_SELECTOR)(SEL_PageViewEvent)(&_SELECTOR)
 
-class PageView : public Layout , public UIScrollInterface
+/**
+ *@brief Layout manager that allows the user to flip left & right and up & down through pages of data.
+ *
+ */
+class CC_GUI_DLL PageView : public ListView
 {
     
     DECLARE_CLASS_GUI_INFO
     
 public:
+    /**
+     * Page turn event type.
+     */
     enum class EventType
     {
         TURNING
     };
     
+    /**
+     * Touch direction type.
+     */
     enum class TouchDirection
     {
         LEFT,
-        RIGHT
+        RIGHT,
+        UP,
+        DOWN
     };
-    
-    typedef std::function<void(Ref*,EventType)> ccPageViewCallback;
+
+    /**
+     * PageView page turn event callback.
+     */
+    typedef std::function<void(Ref*, EventType)> ccPageViewCallback;
+
     /**
      * Default constructor
+     * @js ctor
+     * @lua new
      */
     PageView();
     
     /**
      * Default destructor
+     * @js NA
+     * @lua NA
      */
     virtual ~PageView();
     
     /**
-     * Allocates and initializes.
+     * Create an empty PageView.
+     *@return A PageView instance.
      */
     static PageView* create();
-    
-    /**
-     * Add a widget to a page of pageview.
-     *
-     * @param widget    widget to be added to pageview.
-     *
-     * @param pageIdx   index of page.
-     *
-     * @param forceCreate   if force create and there is no page exsit, pageview would create a default page for adding widget.
-     */
-    void addWidgetToPage(Widget* widget, ssize_t pageIdx, bool forceCreate);
-    
-    /**
-     * Push back a page to pageview.
-     *
-     * @param page    page to be added to pageview.
-     */
-    void addPage(Layout* page);
-    
-    /**
-     * Inert a page to pageview.
-     *
-     * @param page    page to be added to pageview.
-     */
-    void insertPage(Layout* page, int idx);
-    
-    /**
-     * Remove a page of pageview.
-     *
-     * @param page    page which will be removed.
-     */
-    void removePage(Layout* page);
 
     /**
-     * Remove a page at index of pageview.
+     * Changes direction
+     *  Direction Direction::VERTICAL means vertical scroll, Direction::HORIZONTAL means horizontal scroll.
+     * @param direction Set the page view's scroll direction.
+     */
+    virtual void setDirection(Direction direction) override;
+
+    /**
+     * Add a widget as a page of PageView in a given index.
      *
-     * @param index    index of page.
+     * @param widget    Widget to be added to pageview.
+     * @param pageIdx   A given index.
+     * @param forceCreate   If `forceCreate` is true and `widget` isn't exists, pageview would create a default page and add it.
+     *
+     * Since v3.9, this is deprecated. Use `insertPage(Widget* page, int idx)` instead.
+     */
+    CC_DEPRECATED_ATTRIBUTE void addWidgetToPage(Widget* widget, ssize_t pageIdx, bool forceCreate);
+    
+    /**
+     * Insert a page into the end of PageView.
+     *
+     * @param page Page to be inserted.
+     */
+    void addPage(Widget* page);
+
+    /**
+     * Insert a page into PageView at a given index.
+     *
+     * @param page  Page to be inserted.
+     * @param idx   A given index.
+     */
+    void insertPage(Widget* page, int idx);
+
+    /**
+     * Remove a page of PageView.
+     *
+     * @param page  Page to be removed.
+     */
+    void removePage(Widget* page);
+
+    /**
+     * Remove a page at a given index of PageView.
+     *
+     * @param index  A given index.
      */
     void removePageAtIndex(ssize_t index);
-    
+
+    /**
+     * @brief Remove all pages of the PageView.
+     */
     void removeAllPages();
     
     /**
-     * scroll pageview to index.
+     * Scroll to a page with a given index.
      *
-     * @param idx    index of page.
+     * @param idx   A given index in the PageView. Index start from 0 to pageCount -1.
      */
     void scrollToPage(ssize_t idx);
-    
+
     /**
-     * Gets current page index.
+     * Scroll to a page with a given index.
      *
+     * @param idx   A given index in the PageView. Index start from 0 to pageCount -1.
+     */
+    void scrollToItem(ssize_t itemIndex);
+
+    /**
+     * Gets current displayed page index.
+     * @return current page index.
+     *
+     * Since v3.9, this is deprecated. Use `getCurrentPageIndex()` instead.
+     */
+    CC_DEPRECATED_ATTRIBUTE ssize_t getCurPageIndex() const;
+
+    /**
+     * Gets current displayed page index.
      * @return current page index.
      */
-    ssize_t getCurPageIndex() const;
-    
-    Vector<Layout*>& getPages();
-    
-    Layout* getPage(ssize_t index);
-    
-    // event
-    CC_DEPRECATED_ATTRIBUTE void addEventListenerPageView(Ref *target, SEL_PageViewEvent selector);
-    void addEventListener(const ccPageViewCallback& callback);
-    
+    ssize_t getCurrentPageIndex() const { return _currentPageIndex; }
 
-    
-    virtual bool onTouchBegan(Touch *touch, Event *unusedEvent) override;
-    virtual void onTouchMoved(Touch *touch, Event *unusedEvent) override;
-    virtual void onTouchEnded(Touch *touch, Event *unusedEvent) override;
-    virtual void onTouchCancelled(Touch *touch, Event *unusedEvent) override;
-    
-    //override "update" method of widget.
-    virtual void update(float dt) override;
     /**
-     * Sets LayoutType.
+     * Jump to a page with a given index without scrolling.
+     * This is the different between scrollToPage.
      *
-     * @see LayoutType
+     * @param index A given index in PageView. Index start from 0 to pageCount -1.
      *
-     * @param LayoutType
+     * Since v3.9, this is deprecated. Use `setCurrentPageIndex()` instead.
      */
-    virtual void setLayoutType(Type type) override{};
+    CC_DEPRECATED_ATTRIBUTE void setCurPageIndex(ssize_t index);
+
+    /**
+     * Jump to a page with a given index without scrolling.
+     * This is the different between scrollToPage.
+     *
+     * @param index A given index in PageView. Index start from 0 to pageCount -1.
+     */
+    void setCurrentPageIndex(ssize_t index);
+
+    /**
+     * @brief Get all the pages in the PageView.
+     * @return A vector of Layout pointers.
+     *
+     * Since v3.9, this is obsolete. Use `Vector<Widget*>& ListView::getItems()` instead.
+     */
+    CC_DEPRECATED_ATTRIBUTE Vector<Layout*>& getPages();
+
+    /**
+     * @brief Get a page at a given index
+     *
+     * @param index A given index.
+     * @return A layout pointer in PageView container.
+     *
+     * Since v3.9, this is obsolete. Use `Widget* ListView::getItem(index)` instead.
+     */
+    CC_DEPRECATED_ATTRIBUTE Layout* getPage(ssize_t index);
     
     /**
-     * Gets LayoutType.
-     *
-     * @see LayoutType
-     *
-     * @return LayoutType
+     * Add a page turn callback to PageView, then when one page is turning, the callback will be called.
+     *@deprecated Use `PageView::addEventListener` instead.
+     *@param target A pointer of `Ref*` type.
+     *@param selector A member function pointer with signature of `SEL_PageViewEvent`.
      */
-    virtual Type getLayoutType() const override{return Type::ABSOLUTE;};
-    
+    CC_DEPRECATED_ATTRIBUTE void addEventListenerPageView(Ref *target, SEL_PageViewEvent selector);
+
     /**
-     * Returns the "class name" of widget.
+     * @brief Add a page turn callback to PageView, then when one page is turning, the callback will be called.
+     *
+     * @param callback A page turning callback.
      */
+    void addEventListener(const ccPageViewCallback& callback);
+    using ScrollView::addEventListener;
+    //override methods
     virtual std::string getDescription() const override;
 
-    virtual void onEnter() override;
+    /**
+     * @brief Toggle page indicator enabled.
+     *
+     * @param enabled True if enable page indicator, false otherwise.
+     */
+    void setIndicatorEnabled(bool enabled);
+
+    /**
+     * @brief Query page indicator state.
+     *
+     * @return True if page indicator is enabled, false otherwise.
+     */
+    bool getIndicatorEnabled() const { return _indicator != nullptr; }
+
+    /**
+     * @brief Set the page indicator's position using anchor point.
+     *
+     * @param positionAsAnchorPoint The position as anchor point.
+     */
+    void setIndicatorPositionAsAnchorPoint(const Vec2& positionAsAnchorPoint);
+
+    /**
+     * @brief Get the page indicator's position as anchor point.
+     *
+     * @return positionAsAnchorPoint
+     */
+    const Vec2& getIndicatorPositionAsAnchorPoint() const;
+
+    /**
+     * @brief Set the page indicator's position in page view.
+     *
+     * @param position The position in page view
+     */
+    void setIndicatorPosition(const Vec2& position);
+    
+    /**
+     * @brief Get the page indicator's position.
+     *
+     * @return positionAsAnchorPoint
+     */
+    const Vec2& getIndicatorPosition() const;
+
+    /**
+     * @brief Set space between page indicator's index nodes.
+     *
+     * @param spaceBetweenIndexNodes Space between nodes in pixel.
+     */
+    void setIndicatorSpaceBetweenIndexNodes(float spaceBetweenIndexNodes);
+
+    /**
+     * @brief Get the space between page indicator's index nodes.
+     *
+     * @return spaceBetweenIndexNodes
+     */
+    float getIndicatorSpaceBetweenIndexNodes() const;
+
+    /**
+     * @brief Set color of page indicator's selected index.
+     *
+     * @param color Space between nodes in pixel.
+     */
+    void setIndicatorSelectedIndexColor(const Color3B& color);
+
+    /**
+     * @brief Get the color of page indicator's selected index.
+     *
+     * @return color
+     */
+    const Color3B& getIndicatorSelectedIndexColor() const;
+
+    /**
+     * @brief Set color of page indicator's index nodes.
+     *
+     * @param color Space between nodes in pixel.
+     */
+    void setIndicatorIndexNodesColor(const Color3B& color);
+    
+    /**
+     * @brief Get the color of page indicator's index nodes.
+     *
+     * @return color
+     */
+    const Color3B& getIndicatorIndexNodesColor() const;
+    
+    /**
+     * @brief Set scale of page indicator's index nodes.
+     *
+     * @param indexNodesScale Scale of index nodes.
+     */
+    void setIndicatorIndexNodesScale(float indexNodesScale);
+    
+    /**
+     * sets texture for index nodes.
+     *
+     * @param fileName   File name of texture.
+     * @param resType    @see TextureResType .
+     */
+    void setIndicatorIndexNodesTexture(const std::string& texName,Widget::TextureResType texType = Widget::TextureResType::LOCAL);
+    
+    /**
+     * @brief Get scale of page indicator's index nodes.
+     *
+     * @return indexNodesScale
+     */
+    float getIndicatorIndexNodesScale() const;
+    
+    /**
+     *@brief If you don't specify the value, the pageView will turn page when scrolling at the half width of a page.
+     *@param threshold  A threshold in float.
+     *@deprecated Since v3.9, this method has no effect.
+     */
+    CC_DEPRECATED_ATTRIBUTE void setCustomScrollThreshold(float threshold);
+
+    /**
+     *@brief Query the custom scroll threshold of the PageView.
+     *@return Custom scroll threshold in float.
+     *@deprecated Since v3.9, this method always returns 0.
+     */
+    CC_DEPRECATED_ATTRIBUTE float getCustomScrollThreshold()const;
+
+    /**
+     *@brief Set using user defined scroll page threshold or not.
+     * If you set it to false, then the default scroll threshold is pageView.width / 2
+     *@param flag True if using custom scroll threshold, false otherwise.
+     *@deprecated Since v3.9, this method has no effect.
+     */
+    CC_DEPRECATED_ATTRIBUTE void setUsingCustomScrollThreshold(bool flag);
+
+    /**
+     *@brief Query whether use user defined scroll page threshold or not.
+     *@return True if using custom scroll threshold, false otherwise.
+     *@deprecated Since v3.9, this method always returns false.
+     */
+    CC_DEPRECATED_ATTRIBUTE bool isUsingCustomScrollThreshold()const;
+
+    void setAutoScrollStopEpsilon(float epsilon);
 
 CC_CONSTRUCTOR_ACCESS:
     virtual bool init() override;
 
-protected:
-    virtual void addChild(Node * child) override;
-    virtual void addChild(Node * child, int zOrder) override;
-    virtual void addChild(Node* child, int zOrder, int tag) override;
-    virtual void removeChild(Node* widget, bool cleanup = true) override;
-    virtual void removeAllChildren() override;
-    virtual void removeAllChildrenWithCleanup(bool cleanup) override;
-    virtual Vector<Node*>& getChildren() override{return Widget::getChildren();};
-    virtual const Vector<Node*>& getChildren() const override{return Widget::getChildren();};
-    virtual ssize_t getChildrenCount() const override {return Widget::getChildrenCount();};
-    virtual Node * getChildByTag(int tag) override {return Widget::getChildByTag(tag);};
-virtual Widget* getChildByName(const std::string& name) override {return Widget::getChildByName(name);};
+    //override methods
+    virtual void doLayout() override;
 
-    Layout* createPage();
-    float getPositionXByIndex(ssize_t idx);
-    void updateBoundaryPages();
-    virtual void handlePressLogic(const Vec2 &touchPoint) override;
-    virtual void handleMoveLogic(const Vec2 &touchPoint) override;
-    virtual void handleReleaseLogic(const Vec2 &touchPoint) override;
-    virtual void interceptTouchEvent(int handleState, Widget* sender, const Vec2 &touchPoint) override;
-    virtual void checkChildInfo(int handleState, Widget* sender, const Vec2 &touchPoint) override;
-    virtual bool scrollPages(float touchOffset);
-    void movePages(float offset);
+protected:
     void pageTurningEvent();
-    void updateChildrenSize();
-    void updateChildrenPosition();
+    virtual float getAutoScrollStopEpsilon() const override;
+
+    virtual void remedyLayoutParameter(Widget* item)override;
+    virtual void moveInnerContainer(const Vec2& deltaMove, bool canStartBounceBack) override;
+    virtual void onItemListChanged() override;
     virtual void onSizeChanged() override;
+    virtual void handleReleaseLogic(Touch *touch) override;
+
     virtual Widget* createCloneInstance() override;
     virtual void copySpecialProperties(Widget* model) override;
-    virtual void copyClonedWidgetChildren(Widget* model) override;
-    virtual void setClippingEnabled(bool enabled) override {Layout::setClippingEnabled(enabled);};
-    virtual void doLayout() override{if (!_doLayoutDirty){return;} _doLayoutDirty = false;};
-protected:
-    ssize_t _curPageIdx;
-    Vector<Layout*> _pages;
-    TouchDirection _touchMoveDir;
-    float _touchStartLocation;
-    float _touchMoveStartLocation;
-    Vec2 _movePagePoint;
-    Widget* _leftChild;
-    Widget* _rightChild;
-    float _leftBoundary;
-    float _rightBoundary;
-    bool _isAutoScrolling;
-    float _autoScrollDistance;
-    float _autoScrollSpeed;
-    int _autoScrollDir;
-    float _childFocusCancelOffset;
 
+    void refreshIndicatorPosition();
+
+protected:
+    PageViewIndicator* _indicator;
+    Vec2 _indicatorPositionAsAnchorPoint;
+
+    ssize_t _currentPageIndex;
+
+    float _childFocusCancelOffset;
 
     Ref* _pageViewEventListener;
 #if defined(__GNUC__) && ((__GNUC__ >= 4) || ((__GNUC__ == 3) && (__GNUC_MINOR__ >= 1)))
@@ -237,9 +422,12 @@ protected:
 #pragma warning (pop)
 #endif
     ccPageViewCallback _eventCallback;
+    float _autoScrollStopEpsilon;
 };
 
 }
 NS_CC_END
+// end of ui group
+/// @}
 
 #endif /* defined(__PageView__) */

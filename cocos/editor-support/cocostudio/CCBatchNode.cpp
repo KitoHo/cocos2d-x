@@ -22,10 +22,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ****************************************************************************/
 
-#include "cocostudio/CCBatchNode.h"
-#include "cocostudio/CCArmatureDefine.h"
-#include "cocostudio/CCArmature.h"
-#include "cocostudio/CCSkin.h"
+#include "editor-support/cocostudio/CCBatchNode.h"
+#include "editor-support/cocostudio/CCArmature.h"
+#include "editor-support/cocostudio/CCSkin.h"
 
 #include "renderer/CCRenderer.h"
 #include "renderer/CCGroupCommand.h"
@@ -38,7 +37,7 @@ namespace cocostudio {
 
 BatchNode *BatchNode::create()
 {
-    BatchNode *batchNode = new BatchNode();
+    BatchNode *batchNode = new (std::nothrow) BatchNode();
     if (batchNode && batchNode->init())
     {
         batchNode->autorelease();
@@ -66,16 +65,6 @@ bool BatchNode::init()
     return ret;
 }
 
-void BatchNode::addChild(Node *pChild)
-{
-    Node::addChild(pChild);
-}
-
-void BatchNode::addChild(Node *child, int zOrder)
-{
-    Node::addChild(child, zOrder);
-}
-
 void BatchNode::addChild(Node *child, int zOrder, int tag)
 {
     Node::addChild(child, zOrder, tag);
@@ -85,7 +74,21 @@ void BatchNode::addChild(Node *child, int zOrder, int tag)
         armature->setBatchNode(this);
         if (_groupCommand == nullptr)
         {
-            _groupCommand = new GroupCommand();
+            _groupCommand = new (std::nothrow) GroupCommand();
+        }
+    }
+}
+
+void BatchNode::addChild(cocos2d::Node *child, int zOrder, const std::string &name)
+{
+    Node::addChild(child, zOrder, name);
+    Armature *armature = dynamic_cast<Armature *>(child);
+    if (armature != nullptr)
+    {
+        armature->setBatchNode(this);
+        if (_groupCommand == nullptr)
+        {
+            _groupCommand = new (std::nothrow) GroupCommand();
         }
     }
 }
@@ -101,7 +104,7 @@ void BatchNode::removeChild(Node* child, bool cleanup)
     Node::removeChild(child, cleanup);
 }
 
-void BatchNode::visit(Renderer *renderer, const Mat4 &parentTransform, bool parentTransformUpdated)
+void BatchNode::visit(Renderer *renderer, const Mat4 &parentTransform, uint32_t parentFlags)
 {
     // quick return if not visible. children won't be drawn.
     if (!_visible)
@@ -109,29 +112,29 @@ void BatchNode::visit(Renderer *renderer, const Mat4 &parentTransform, bool pare
         return;
     }
 
-    bool dirty = parentTransformUpdated || _transformUpdated;
-    if(dirty)
-        _modelViewTransform = transform(parentTransform);
-    _transformUpdated = false;
+    uint32_t flags = processParentFlags(parentTransform, parentFlags);
 
-    // IMPORTANT:
-    // To ease the migration to v3.0, we still support the Mat4 stack,
-    // but it is deprecated and your code should not rely on it
-    Director* director = Director::getInstance();
-    CCASSERT(nullptr != director, "Director is null when seting matrix stack");
-    director->pushMatrix(MATRIX_STACK_TYPE::MATRIX_STACK_MODELVIEW);
-    director->loadMatrix(MATRIX_STACK_TYPE::MATRIX_STACK_MODELVIEW, _modelViewTransform);
-
-    sortAllChildren();
-    draw(renderer, _modelViewTransform, dirty);
-
-    // reset for next frame
-    _orderOfArrival = 0;
-
-    director->popMatrix(MATRIX_STACK_TYPE::MATRIX_STACK_MODELVIEW);
+    if (isVisitableByVisitingCamera())
+    {
+        // IMPORTANT:
+        // To ease the migration to v3.0, we still support the Mat4 stack,
+        // but it is deprecated and your code should not rely on it
+        Director* director = Director::getInstance();
+        director->pushMatrix(MATRIX_STACK_TYPE::MATRIX_STACK_MODELVIEW);
+        director->loadMatrix(MATRIX_STACK_TYPE::MATRIX_STACK_MODELVIEW, _modelViewTransform);
+        
+        sortAllChildren();
+        draw(renderer, _modelViewTransform, flags);
+        
+        // FIX ME: Why need to set _orderOfArrival to 0??
+        // Please refer to https://github.com/cocos2d/cocos2d-x/pull/6920
+        // setOrderOfArrival(0);
+        
+        director->popMatrix(MATRIX_STACK_TYPE::MATRIX_STACK_MODELVIEW);
+    }
 }
 
-void BatchNode::draw(Renderer *renderer, const Mat4 &transform, bool transformUpdated)
+void BatchNode::draw(Renderer *renderer, const Mat4 &transform, uint32_t flags)
 {
     if (_children.empty())
     {
@@ -152,14 +155,14 @@ void BatchNode::draw(Renderer *renderer, const Mat4 &transform, bool transformUp
                 pushed = true;
             }
         
-            armature->visit(renderer, transform, transformUpdated);
+            armature->visit(renderer, transform, flags);
         }
         else
         {
             renderer->popGroup();
             pushed = false;
             
-            ((Node *)object)->visit(renderer, transform, transformUpdated);
+            ((Node *)object)->visit(renderer, transform, flags);
         }
     }
 }

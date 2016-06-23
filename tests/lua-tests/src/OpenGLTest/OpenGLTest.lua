@@ -1,6 +1,23 @@
-require "OpenglConstants"
-require "Cocos2dConstants"
-require "Opengl"
+local vertDefaultSource = "\n".."\n" ..
+                  "attribute vec4 a_position;\n" ..
+                  "attribute vec2 a_texCoord;\n" ..
+                  "attribute vec4 a_color;\n\n" ..
+                  "\n#ifdef GL_ES\n" .. 
+                  "varying lowp vec4 v_fragmentColor;\n" ..
+                  "varying mediump vec2 v_texCoord;\n" ..
+                  "\n#else\n" ..
+                  "varying vec4 v_fragmentColor;" ..
+                  "varying vec2 v_texCoord;" ..
+                  "\n#endif\n" ..
+                  "void main()\n" ..
+                  "{\n" .. 
+                  "   gl_Position = CC_MVPMatrix * a_position;\n"..
+                  "   v_fragmentColor = a_color;\n"..
+                  "   v_texCoord = a_texCoord;\n" ..
+                  "} \n"
+
+local scaleFactor = cc.Director:getInstance():getContentScaleFactor()
+
 local function OpenGLTestMainLayer()
     local kItemTagBasic = 1000
     local testCount = 16
@@ -173,377 +190,111 @@ local function OpenGLTestMainLayer()
         return RetroEffectlayer
     end
 
-    local function createShaderMajoriTest()
-        local uniformCenter = 0
-        local uniformResolution    = 0
-        local time    = 0
-        local squareVertexPositionBuffer = {}
-        local majorLayer = cc.Layer:create()
+    local function createShaderNodeLayer(vSource, fSource)
+        local shaderNodeLayer = cc.Layer:create()
 
-        InitTitle(majorLayer)
-        --loadShaderVertex
-        local shader = cc.GLProgram:create("Shaders/example_Monjori.vsh", "Shaders/example_Monjori.fsh")
+        InitTitle(shaderNodeLayer)
 
-        shader:bindAttribLocation("aVertex", cc.VERTEX_ATTRIB_POSITION)
-        shader:link()
-        shader:updateUniforms()
-
-        local program = shader:getProgram()
+        local vertSource = vSource
+        local fragSource = fSource
+        local glProgram = cc.GLProgram:createWithByteArrays(vertSource, fragSource)
+        glProgram:retain()
 
         local glNode  = gl.glNodeCreate()
-        glNode:setContentSize(cc.size(256, 256))
-        glNode:setAnchorPoint(cc.p(0.5, 0.5))
-        uniformCenter = gl.getUniformLocation(program,"center")
-        uniformResolution  = gl.getUniformLocation( program, "resolution")
-        glNode:setGLProgram(shader)
 
-        local function initBuffer()
-            squareVertexPositionBuffer = gl.createBuffer()
-            gl.bindBuffer(gl.ARRAY_BUFFER,squareVertexPositionBuffer)
-            local vertices = { 256,256,0,256,256,0,0,0}
-            gl.bufferData(gl.ARRAY_BUFFER,8,vertices,gl.STATIC_DRAW)
+        local resolution = cc.p(256, 256)
+        local director = cc.Director:getInstance()
+        local frameSize = director:getOpenGLView():getFrameSize()
+        local visibleSize = director:getVisibleSize()
+        local retinaFactor = director:getOpenGLView():getRetinaFactor()
+        local center = cc.p( size.width / 2 * frameSize.width / visibleSize.width * retinaFactor, size.height / 2 * frameSize.height / visibleSize.height * retinaFactor)
+
+        local function initBuffers()
+            local w = 256
+            local h = 256
+            local x = size.width / 2 - w / 2
+            local y = size.height / 2 -h / 2
+            local vertices ={ x,y, x+w,y, x+w,y+h, x,y, x,y+h, x+w,y+h }
+            local vbo = gl.createBuffer()
+            gl.bindBuffer(gl.ARRAY_BUFFER, vbo)
+            gl.bufferData(gl.ARRAY_BUFFER, table.getn(vertices), vertices, gl.STATIC_DRAW)
             gl.bindBuffer(gl.ARRAY_BUFFER, 0)
+            return vbo
         end
 
-        local function updateMajori(fTime)
+        local vbo = initBuffers()
+
+        local function update(fTime)
             time = time + fTime
         end
 
-        local function majoriDraw(transform, transformUpdated)
-            if nil ~= shader then
-                shader:use()
-                shader:setUniformsForBuiltins(transform)
-                --Uniforms
-                shader:setUniformLocationF32( uniformCenter, size.width/2, size.height/2)
-                shader:setUniformLocationF32( uniformResolution, 256, 256)
+        local function draw(transform, transformUpdated)
+            glProgram:use()
+            glProgram:setUniformsForBuiltins()
 
-                gl.glEnableVertexAttribs(cc.VERTEX_ATTRIB_FLAG_POSITION)
+            local uniformCenter = gl.getUniformLocation(glProgram:getProgram(), "center")
+            glProgram:setUniformLocationF32(uniformCenter, center.x, center.y)
+            local uniformResolution = gl.getUniformLocation(glProgram:getProgram(), "resolution")
+            glProgram:setUniformLocationF32(uniformResolution, resolution.x, resolution.y)
 
-                --Draw fullscreen Square
-                gl.bindBuffer(gl.ARRAY_BUFFER,squareVertexPositionBuffer)
-                gl.vertexAttribPointer(cc.VERTEX_ATTRIB_POSITION, 2, gl.FLOAT, false, 0, 0)
-                gl.drawArrays(gl.TRIANGLE_STRIP,0,4)
-                gl.bindBuffer(gl.ARRAY_BUFFER,0)
+            gl.glEnableVertexAttribs(cc.VERTEX_ATTRIB_FLAG_POSITION)
+            gl.bindBuffer(gl.ARRAY_BUFFER, vbo)
+            gl.vertexAttribPointer(cc.VERTEX_ATTRIB_POSITION, 2, gl.FLOAT, false, 0, 0);
+            gl.drawArrays(gl.TRIANGLES, 0, 6)
+            gl.bindBuffer(gl.ARRAY_BUFFER, 0)
+        end
+  
+        shaderNodeLayer:scheduleUpdateWithPriorityLua(update,0)
+        glNode:registerScriptDrawHandler(draw)
+        time = 0
+        shaderNodeLayer:addChild(glNode,-10)
+        glNode:setPosition( size.width/2, size.height/2)
+
+        local function onNodeEvent(event)
+            if "exit" == event then
+                glProgram:release()
             end
         end
-        initBuffer()
-        majorLayer:scheduleUpdateWithPriorityLua(updateMajori,0)
-        glNode:registerScriptDrawHandler(majoriDraw)
-        time = 0
-        majorLayer:addChild(glNode,-10)
-        print("pos is ", size.width/2, size.height/2)
-        glNode:setPosition( size.width/2, size.height/2)
-        return majorLayer
+        
+        shaderNodeLayer:registerScriptHandler(onNodeEvent)
+
+        return shaderNodeLayer
+    end
+
+    local function createShaderMajoriTest()
+        local vSource = vertDefaultSource
+        local fSource = cc.FileUtils:getInstance():getStringFromFile("Shaders/example_Monjori.fsh")
+        return createShaderNodeLayer(vSource, fSource)
     end
 
     local function createShaderMandelbrotTest()
-        local uniformCenter = 0
-        local uniformResolution    = 0
-        local time    = 0
-        local squareVertexPositionBuffer = {}
-        local mandelbrotLayer = cc.Layer:create()
-
-        InitTitle(mandelbrotLayer)
-        --loadShaderVertex
-        local shader = cc.GLProgram:create("Shaders/example_Mandelbrot.vsh", "Shaders/example_Mandelbrot.fsh")
-
-        shader:bindAttribLocation("aVertex", 0)
-        shader:link()
-        shader:updateUniforms()
-
-        local program = shader:getProgram()
-
-        local glNode  = gl.glNodeCreate()
-        glNode:setContentSize(cc.size(256,256))
-        glNode:setAnchorPoint(cc.p(0.5, 0.5))
-        uniformCenter = gl.getUniformLocation(program,"center")
-        uniformResolution  = gl.getUniformLocation( program, "resolution")
-        glNode:setGLProgram(shader)
-
-        local function initBuffer()
-            squareVertexPositionBuffer.buffer_id = gl.createBuffer()
-            gl.bindBuffer(gl.ARRAY_BUFFER,squareVertexPositionBuffer.buffer_id)
-            local vertices = { 256,256,0,256,256,0,0,0}
-            gl.bufferData(gl.ARRAY_BUFFER,8,vertices,gl.STATIC_DRAW)
-            gl.bindBuffer(gl.ARRAY_BUFFER, 0)
-        end
-
-        local function updateMandelbrot(fTime)
-            time = time + fTime
-        end
-
-        local function mandelbrotDraw(transform, transformUpdated)
-            if nil ~= shader then
-                shader:use()
-                shader:setUniformsForBuiltins(transform)
-                --Uniforms
-                shader:setUniformLocationF32( uniformCenter, size.width/2, size.height/2)
-                shader:setUniformLocationF32( uniformResolution, 256, 256)
-
-                gl.glEnableVertexAttribs(0x1)
-
-                --Draw fullscreen Square
-                gl.bindBuffer(gl.ARRAY_BUFFER,squareVertexPositionBuffer.buffer_id)
-                gl.vertexAttribPointer(cc.VERTEX_ATTRIB_POSITION, 2, gl.FLOAT, false, 0, 0)
-                gl.drawArrays(gl.TRIANGLE_STRIP,0,4)
-                gl.bindBuffer(gl.ARRAY_BUFFER,0)
-            end
-        end
-        initBuffer()
-        mandelbrotLayer:scheduleUpdateWithPriorityLua(updateMandelbrot,0)
-        glNode:registerScriptDrawHandler(mandelbrotDraw)
-        time = 0
-        mandelbrotLayer:addChild(glNode,-10)
-        glNode:setPosition( size.width/2, size.height/2)
-        return mandelbrotLayer
+        local vSource = vertDefaultSource
+        local fSource = cc.FileUtils:getInstance():getStringFromFile("Shaders/example_Mandelbrot.fsh")
+        return createShaderNodeLayer(vSource, fSource)
     end
 
     local function createShaderHeartTest()
-        local uniformCenter = 0
-        local uniformResolution    = 0
-        local time    = 0
-        local squareVertexPositionBuffer = {}
-        local heartLayer = cc.Layer:create()
-
-        InitTitle(heartLayer)
-        --loadShaderVertex
-        local shader = cc.GLProgram:create("Shaders/example_Heart.vsh", "Shaders/example_Heart.fsh")
-
-        shader:bindAttribLocation("aVertex", 0)
-        shader:link()
-        shader:updateUniforms()
-
-        local program = shader:getProgram()
-
-        local glNode  = gl.glNodeCreate()
-        glNode:setContentSize(cc.size(256,256))
-        glNode:setAnchorPoint(cc.p(0.5, 0.5))
-        uniformCenter = gl.getUniformLocation(program,"center")
-        uniformResolution  = gl.getUniformLocation( program, "resolution")
-        glNode:setGLProgram(shader)
-
-        local function initBuffer()
-            squareVertexPositionBuffer.buffer_id = gl.createBuffer()
-            gl.bindBuffer(gl.ARRAY_BUFFER,squareVertexPositionBuffer.buffer_id)
-            local vertices = { 256,256,0,256,256,0,0,0}
-            gl.bufferData(gl.ARRAY_BUFFER,8,vertices,gl.STATIC_DRAW)
-            gl.bindBuffer(gl.ARRAY_BUFFER, 0)
-        end
-
-        local function updateHeart(fTime)
-            time = time + fTime
-        end
-
-        local function heartDraw(transform, transformUpdated)
-            if nil ~= shader then
-                shader:use()
-                shader:setUniformsForBuiltins(transform)
-                --Uniforms
-                shader:setUniformLocationF32( uniformCenter, size.width/2, size.height/2)
-                shader:setUniformLocationF32( uniformResolution, 256, 256)
-
-                gl.glEnableVertexAttribs(0x1)
-
-                --Draw fullscreen Square
-                gl.bindBuffer(gl.ARRAY_BUFFER,squareVertexPositionBuffer.buffer_id)
-                gl.vertexAttribPointer(cc.VERTEX_ATTRIB_POSITION, 2, gl.FLOAT, false, 0, 0)
-                gl.drawArrays(gl.TRIANGLE_STRIP,0,4)
-                gl.bindBuffer(gl.ARRAY_BUFFER,0)
-            end
-        end
-        initBuffer()
-        heartLayer:scheduleUpdateWithPriorityLua(updateHeart,0)
-        glNode:registerScriptDrawHandler(heartDraw)
-        time = 0
-        heartLayer:addChild(glNode,-10)
-        glNode:setPosition( size.width/2, size.height/2)
-        return heartLayer
+        local vSource = vertDefaultSource
+        local fSource = cc.FileUtils:getInstance():getStringFromFile("Shaders/example_Heart.fsh")
+        return createShaderNodeLayer(vSource, fSource)
     end
 
     local function createShaderPlasmaTest()
-        local uniformCenter = 0
-        local uniformResolution    = 0
-        local time    = 0
-        local squareVertexPositionBuffer = {}
-        local plasmaLayer = cc.Layer:create()
-
-        InitTitle(plasmaLayer)
-        --loadShaderVertex
-        local shader = cc.GLProgram:create("Shaders/example_Plasma.vsh", "Shaders/example_Plasma.fsh")
-
-        shader:bindAttribLocation("aVertex", 0)
-        shader:link()
-        shader:updateUniforms()
-
-        local program = shader:getProgram()
-
-        local glNode  = gl.glNodeCreate()
-        glNode:setContentSize(cc.size(256,256))
-        glNode:setAnchorPoint(cc.p(0.5, 0.5))
-        uniformCenter = gl.getUniformLocation(program,"center")
-        uniformResolution  = gl.getUniformLocation( program, "resolution")
-        glNode:setGLProgram(shader)
-
-        local function initBuffer()
-            squareVertexPositionBuffer.buffer_id = gl.createBuffer()
-            gl.bindBuffer(gl.ARRAY_BUFFER,squareVertexPositionBuffer.buffer_id)
-            local vertices = { 256,256,0,256,256,0,0,0}
-            gl.bufferData(gl.ARRAY_BUFFER,8,vertices,gl.STATIC_DRAW)
-            gl.bindBuffer(gl.ARRAY_BUFFER, 0)
-        end
-
-        local function updatePlasma(fTime)
-            time = time + fTime
-        end
-
-        local function plasmaDraw(transform, transformUpdated)
-            if nil ~= shader then
-                shader:use()
-                shader:setUniformsForBuiltins(transform)
-                --Uniforms
-                shader:setUniformLocationF32( uniformCenter, size.width/2, size.height/2)
-                shader:setUniformLocationF32( uniformResolution, 256, 256)
-
-                gl.glEnableVertexAttribs(0x1)
-
-                --Draw fullscreen Square
-                gl.bindBuffer(gl.ARRAY_BUFFER,squareVertexPositionBuffer.buffer_id)
-                gl.vertexAttribPointer(cc.VERTEX_ATTRIB_POSITION, 2, gl.FLOAT, false, 0, 0)
-                gl.drawArrays(gl.TRIANGLE_STRIP,0,4)
-                gl.bindBuffer(gl.ARRAY_BUFFER,0)
-            end
-        end
-        initBuffer()
-        plasmaLayer:scheduleUpdateWithPriorityLua(updatePlasma,0)
-        glNode:registerScriptDrawHandler(plasmaDraw)
-        time = 0
-        plasmaLayer:addChild(glNode,-10)
-        glNode:setPosition( size.width/2, size.height/2)
-        return plasmaLayer
+        local vSource = vertDefaultSource
+        local fSource = cc.FileUtils:getInstance():getStringFromFile("Shaders/example_Plasma.fsh")
+        return createShaderNodeLayer(vSource, fSource)
     end
 
     local function createShaderFlowerTest()
-        local uniformCenter = 0
-        local uniformResolution    = 0
-        local time    = 0
-        local squareVertexPositionBuffer = {}
-        local flowerLayer = cc.Layer:create()
-
-        InitTitle(flowerLayer)
-        --loadShaderVertex
-        local shader = cc.GLProgram:create("Shaders/example_Flower.vsh", "Shaders/example_Flower.fsh")
-
-        shader:bindAttribLocation("aVertex", 0)
-        shader:link()
-        shader:updateUniforms()
-
-        local program = shader:getProgram()
-
-        local glNode  = gl.glNodeCreate()
-        glNode:setContentSize(cc.size(256,256))
-        glNode:setAnchorPoint(cc.p(0.5, 0.5))
-        uniformCenter = gl.getUniformLocation(program,"center")
-        uniformResolution  = gl.getUniformLocation( program, "resolution")
-        glNode:setGLProgram(shader)
-
-        local function initBuffer()
-            squareVertexPositionBuffer.buffer_id = gl.createBuffer()
-            gl.bindBuffer(gl.ARRAY_BUFFER,squareVertexPositionBuffer.buffer_id)
-            local vertices = { 256,256,0,256,256,0,0,0}
-            gl.bufferData(gl.ARRAY_BUFFER,8,vertices,gl.STATIC_DRAW)
-            gl.bindBuffer(gl.ARRAY_BUFFER, 0)
-        end
-
-        local function updateFlower(fTime)
-            time = time + fTime
-        end
-
-        local function flowerDraw(transform, transformUpdated)
-            if nil ~= shader then
-                shader:use()
-                shader:setUniformsForBuiltins(transform)
-                --Uniforms
-                shader:setUniformLocationF32( uniformCenter, size.width/2, size.height/2)
-                shader:setUniformLocationF32( uniformResolution, 256, 256)
-
-                gl.glEnableVertexAttribs(0x1)
-
-                --Draw fullscreen Square
-                gl.bindBuffer(gl.ARRAY_BUFFER,squareVertexPositionBuffer.buffer_id)
-                gl.vertexAttribPointer(cc.VERTEX_ATTRIB_POSITION, 2, gl.FLOAT, false, 0, 0)
-                gl.drawArrays(gl.TRIANGLE_STRIP,0,4)
-                gl.bindBuffer(gl.ARRAY_BUFFER,0)
-            end
-        end
-        initBuffer()
-        flowerLayer:scheduleUpdateWithPriorityLua(updateFlower,0)
-        glNode:registerScriptDrawHandler(flowerDraw)
-        time = 0
-        flowerLayer:addChild(glNode,-10)
-        glNode:setPosition( size.width/2, size.height/2)
-        return flowerLayer
+        local vSource = vertDefaultSource
+        local fSource = cc.FileUtils:getInstance():getStringFromFile("Shaders/example_Flower.fsh")
+        return createShaderNodeLayer(vSource, fSource)
     end
 
     local function createShaderJuliaTest()
-        local uniformCenter = 0
-        local uniformResolution    = 0
-        local time    = 0
-        local squareVertexPositionBuffer = {}
-        local juliaLayer = cc.Layer:create()
-
-        InitTitle(juliaLayer)
-        --loadShaderVertex
-        local shader = cc.GLProgram:create("Shaders/example_Julia.vsh", "Shaders/example_Julia.fsh")
-
-        shader:bindAttribLocation("aVertex", 0)
-        shader:link()
-        shader:updateUniforms()
-
-        local program = shader:getProgram()
-
-        local glNode  = gl.glNodeCreate()
-        glNode:setContentSize(cc.size(256,256))
-        glNode:setAnchorPoint(cc.p(0.5, 0.5))
-        uniformCenter = gl.getUniformLocation(program,"center")
-        uniformResolution  = gl.getUniformLocation( program, "resolution")
-        glNode:setGLProgram(shader)
-
-        local function initBuffer()
-            squareVertexPositionBuffer.buffer_id = gl.createBuffer()
-            gl.bindBuffer(gl.ARRAY_BUFFER,squareVertexPositionBuffer.buffer_id)
-            local vertices = { 256,256,0,256,256,0,0,0}
-            gl.bufferData(gl.ARRAY_BUFFER,8,vertices,gl.STATIC_DRAW)
-            gl.bindBuffer(gl.ARRAY_BUFFER, 0)
-        end
-
-        local function updateJulia(fTime)
-            time = time + fTime
-        end
-
-        local function juliaDraw(transform, transformUpdated)
-            if nil ~= shader then
-                shader:use()
-                shader:setUniformsForBuiltins(transform)
-                --Uniforms
-                shader:setUniformLocationF32( uniformCenter, size.width/2, size.height/2)
-                shader:setUniformLocationF32( uniformResolution, 256, 256)
-
-                gl.glEnableVertexAttribs(0x1)
-
-                --Draw fullscreen Square
-                gl.bindBuffer(gl.ARRAY_BUFFER,squareVertexPositionBuffer.buffer_id)
-                gl.vertexAttribPointer(cc.VERTEX_ATTRIB_POSITION, 2, gl.FLOAT, false, 0, 0)
-                gl.drawArrays(gl.TRIANGLE_STRIP,0,4)
-                gl.bindBuffer(gl.ARRAY_BUFFER,0)
-            end
-        end
-        initBuffer()
-        juliaLayer:scheduleUpdateWithPriorityLua(updateJulia,0)
-        glNode:registerScriptDrawHandler(juliaDraw)
-        time = 0
-        juliaLayer:addChild(glNode,-10)
-        glNode:setPosition( size.width/2, size.height/2)
-        return juliaLayer
+        local vSource = vertDefaultSource
+        local fSource = cc.FileUtils:getInstance():getStringFromFile("Shaders/example_Julia.fsh")
+        return createShaderNodeLayer(vSource, fSource)
     end
 
     local function createGLGetActiveTest()
@@ -558,9 +309,9 @@ local function OpenGLTestMainLayer()
 
         local function getCurrentResult()
             local var = {}
-            local glProgam = sprite:getGLProgram()
-            if nil ~= glProgam then
-                local p = glProgam:getProgram()
+            local glProgram = sprite:getGLProgram()
+            if nil ~= glProgram then
+                local p = glProgram:getProgram()
                 local aaSize,aaType,aaName = gl.getActiveAttrib(p,0)
                 local strFmt = "size:"..aaSize.." type:"..aaType.." name:"..aaName
                 print(strFmt)
@@ -606,6 +357,7 @@ local function OpenGLTestMainLayer()
         glNode:setAnchorPoint(cc.p(0.5,0.5))
         local shaderCache = cc.ShaderCache:getInstance()
         local shader = shaderCache:getProgram("ShaderPositionTexture")
+
         local function initGL()
             texture.texture_id  = gl.createTexture()
             gl.bindTexture(gl.TEXTURE_2D,texture.texture_id )
@@ -646,7 +398,7 @@ local function OpenGLTestMainLayer()
                 shader:setUniformsForBuiltins(transform)
 
                 gl.bindTexture(gl.TEXTURE_2D, texture.texture_id)
-                gl.glEnableVertexAttribs(cc.VERTEX_ATTRIB_FLAG_TEX_COORDS or cc.VERTEX_ATTRIB_FLAG_POSITION)
+                gl.glEnableVertexAttribs(bit._or(cc.VERTEX_ATTRIB_FLAG_TEX_COORDS, cc.VERTEX_ATTRIB_FLAG_POSITION))
 
                 gl.bindBuffer(gl.ARRAY_BUFFER, squareVertexPositionBuffer.buffer_id)
                 gl.vertexAttribPointer(cc.VERTEX_ATTRIB_POSITION,2,gl.FLOAT,false,0,0)
